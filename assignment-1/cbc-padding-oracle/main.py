@@ -1,16 +1,36 @@
-# This is a sample Python script.
+import requests
+from requests import Session
 
-# Press Shift+F10 to execute it or replace it with your code.
-# Press Double Shift to search everywhere for classes, files, tool windows, actions, and settings.
+url = 'http://localhost:5000'
+
+def getAuthToken():
+    # Get cookie
+    session = requests.session()
+    session.get(url)
+    cookies = session.cookies.get_dict()
+    return cookies['authtoken']
+
+def getQuote(authToken):
+    # Get cookie
+    cookies = {'authtoken': authToken}
+    r = requests.get(url+'/quote', cookies=cookies)
+
+    return r.text
+
+def manipulateAuthToken(initialToken, newByte, newByteIndex):
+    stringBytes = str.encode(initialToken)
+    print(stringBytes.hex())
+    stringBytes = stringBytes[0:newByteIndex] + newByte + stringBytes[newByteIndex+1:]
+    print(stringBytes.hex())
+    return stringBytes.decode()
 
 
-def print_hi(name):
-    # Use a breakpoint in the code line below to debug your script.
-    print(f'Hi, {name}')  # Press Ctrl+F8 to toggle the breakpoint.
+authToken = getAuthToken()
+print(authToken)
 
+newToken = manipulateAuthToken(authToken, b'\x64', 127)
+print(newToken)
 
-# Press the green button in the gutter to run the script.
-if __name__ == '__main__':
-    print_hi('PyCharm')
+quote = getQuote(newToken)
 
-# See PyCharm help at https://www.jetbrains.com/help/pycharm/
+print(quote)
