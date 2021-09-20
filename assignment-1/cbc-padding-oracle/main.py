@@ -28,12 +28,9 @@ def manipulateAuthToken(initialToken, newByte, newByteIndex):
 authToken = getAuthToken()
 print(authToken)
 
-newToken = manipulateAuthToken(authToken, b'\x24', 127)
-newToken = manipulateAuthToken(authToken, b'\x25', 126)
-newToken = manipulateAuthToken(authToken, b'\x26', 125)
-newToken = manipulateAuthToken(authToken, b'\x27', 124)
+newToken = manipulateAuthToken(authToken, b'\x64', 127)
 print(newToken)
 
-quote = getQuote(authToken)
+quote = getQuote(newToken)
 
 print(quote)
