@@ -1,34 +1,43 @@
-import string
 import sys
-from concurrent.futures import wait
-from itertools import cycle
-
 import requests
-from enum import Enum
 import re
 import concurrent.futures
 
+from concurrent.futures import wait
+from itertools import cycle
+from enum import Enum
 from py_linq import py_linq
-
 
 class OracleStatus(Enum):
     NoPaddingError = 1,
     PaddingError = 2,
     Unknown = 3
 
+class BlockByteStatus:
+    oracleStatus : OracleStatus
+    block_search_byte : str
+    ct_pos : int
+
 url = 'http://localhost:5000'
 
 
 def getCipher() -> str:
-    # Get cookie
+    """
+    Call endpoint defined in url
+    :return: cipher from endpoint in a hex string
+    """
     session = requests.session()
     session.get(url)
     cookies = session.cookies.get_dict()
     return cookies['authtoken']
 
-def call_oracle(authToken):
-    # Get cookie
-    cookies = {'authtoken': authToken}
+def call_oracle(hexString):
+    """
+    Calls oracle to validated padding
+    :param hexString:
+    :return: OracleStatus enum 
+    """
+    cookies = {'authtoken': hexString}
     r = requests.get(url+'/quote', cookies=cookies)
     if(r.text == 'No quote for you!'):
         return OracleStatus.NoPaddingError
@@ -38,24 +47,41 @@ def call_oracle(authToken):
         return OracleStatus.Unknown
 
 def test_validity(error):
+    """
+    Validates oracles response
+    :param error: OracleStatus enum
+    :return: 1 if padding error is received else 0
+    """
     if error != OracleStatus.PaddingError:
         return 1
     return 0
 
 def split_len(seq, length):
+    """
+    Splits hex string in chunks of length
+    :param seq: hex string
+    :param length: length of desired chunks
+    :return: hex string splitted
+    """
     return [seq[i : i + length] for i in range(0, len(seq), length)]
 
 
 def hex_xor(s1, s2):
+    """
+    xor two hex strings
+    :param s1: hex string
+    :param s2: hex string
+    :return: xor of s1 and s2
+    """
     b = bytearray()
     for c1, c2 in zip(bytes.fromhex(s1), cycle(bytes.fromhex(s2))):
         b.append(c1 ^ c2)
     return b.hex()
 
-""" Create custom block for the byte we search"""
-
-
 def block_search_byte(size_block, i, pos, l):
+    """
+    Create custom block for the byte we search
+    """
     hex_char = hex(pos).split("0x")[1]
     return (
         "00" * (size_block - (i + 1))
@@ -64,11 +90,10 @@ def block_search_byte(size_block, i, pos, l):
         + "".join(l)
     )
 
-
-""" Create custom block for the padding"""
-
-
 def block_padding(size_block, i):
+    """
+    Create custom block for padding
+    """
     l = []
     for t in range(0, i + 1):
         l.append(
@@ -77,13 +102,12 @@ def block_padding(size_block, i):
         )
     return "00" * (size_block - (i + 1)) + "".join(l)
 
-class BlockByteStatus:
-    oracleStatus : OracleStatus
-    block_search_byte : str
-    ct_pos : int
-
 def getBlockByte(size_block, i, ct_pos, valide_value, cipher_block, block):
-    # 1 xor 1 = 0 or valide padding need to be checked
+    """
+    Validates if a byte is to be included
+    Generate hex and calls oracle
+    :return: OracleStatus
+    """
     if ct_pos != i + 1 or (
             len(valide_value) > 0 and int(valide_value[-1], 16) == ct_pos
     ):
@@ -122,6 +146,11 @@ if __name__ == '__main__':
         # for each byte of the block
         for i in range(0, size_block):
             # test each byte max 255
+            """
+            Test the correct values
+            Done concurrently to utilize more processing power and memory
+            Can be tweaked on the concurrent_tasks value
+            """
             blockByteResults = py_linq.Enumerable([])
             futures = []
             searching = True
