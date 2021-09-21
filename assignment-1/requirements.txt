@@ -1,0 +1,6 @@
+###### Requirements without Version Specifiers ######`
+requests
+py_linq
+PyCryptoDome
+six
+###### Requirements with Version Specifiers ######`
