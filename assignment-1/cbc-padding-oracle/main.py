@@ -13,6 +13,7 @@ def getAuthToken() -> str:
 def getQuote(authToken):
     # Get cookie
     cookies = {'authtoken': authToken}
+    print(authToken[len(authToken)-36-2:])
     r = requests.get(url+'/quote', cookies=cookies)
     return r.text
 

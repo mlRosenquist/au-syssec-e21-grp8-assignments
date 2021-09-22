@@ -29,6 +29,7 @@
 #         print(f"{i} is correctly padded")
 from main import getAuthToken, getQuote
 from numpy import ceil
+import sys
 BLOCK_SIZE = 16
 def recoverSecret():
     prefix_known_length = 26 #The known length of the message that preceeds the secret part
@@ -37,25 +38,26 @@ def recoverSecret():
     token = token[16:] #First 16 bytes are IV
     recovered_plaintext = ""
     for b in range(1, int(ceil(len(token)-prefix_known_length)/BLOCK_SIZE + 1)):
-        token_copy = token[:]
-        # token[len[token]-(b*BLOCK_SIZE):len(token)-((b-1)*BLOCK_SIZE)]
         prev_block_start = len(token)-(b*BLOCK_SIZE)-BLOCK_SIZE-1
-        for i in range(15, -1, -1):
+        recovered_block = bytearray()
+        padding = 0x01
+        for i in range(BLOCK_SIZE-1, -1, -1):
+            token_copy = token[:]
+            for j in range(padding - 1): #Use new padding for existing recovered bytes
+                token_copy[prev_block_start + BLOCK_SIZE - 1 - j] = token_copy[prev_block_start + BLOCK_SIZE - 1 - j] ^ recovered_block[j] ^ padding
+            byte_recovered = False
             for j in range(256):
-                token_copy[prev_block_start + i] = j
+                token_copy[prev_block_start + i] = token_copy[prev_block_start + i] ^ j ^ padding
                 result = getQuote((iv + token_copy).hex())
-                if("No quote for you!" in result.text): #Correct bit found  
+                if("No quote for you!" in result): #Correct byte found 
+                    recovered_block = recovered_block + j.to_bytes(1, sys.byteorder)
                     recovered_plaintext += chr(j)
                     print(chr(j))
+                    byte_recovered = True
                     break
-    # for i in range(len(token) - BLOCK_SIZE, prefix_known_length - BLOCK_SIZE, -1): #Recover secret message
-    #     for j in range(256):
-    #         token[i] = j
-    #         result = getQuote((iv + token).hex())
-    #         if("No quote for you!" in result.text): #Correct bit found
-    #             recovered_plaintext += chr(j)
-    #             print(chr(j))
-    #             break #Correct value found - continue
+            padding += 0x01
+            if(not byte_recovered):
+                return ""
     return recovered_plaintext[::-1]
 
     
@@ -63,7 +65,8 @@ def paddingAttack(stringToAdd):
     for i in range(len(stringToAdd)):
         print(i)
 
-recoverSecret()
+secret = recoverSecret()
+print(secret)
 
 
 
