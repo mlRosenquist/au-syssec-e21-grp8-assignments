@@ -1,16 +1,58 @@
-# This is a sample Python script.
+import json
+import random
+from types import SimpleNamespace
 
-# Press Shift+F10 to execute it or replace it with your code.
-# Press Double Shift to search everywhere for classes, files, tool windows, actions, and settings.
+import requests
 
+url = 'http://127.0.0.1:5000'
 
-def print_hi(name):
-    # Use a breakpoint in the code line below to debug your script.
-    print(f'Hi, {name}')  # Press Ctrl+F8 to toggle the breakpoint.
+class sign_document_response:
+    msg : str
+    signature: str
 
+class public_key:
+    N : int
+    e: int
 
-# Press the green button in the gutter to run the script.
+def signRandomDocument(hexstring) -> sign_document_response:
+    """
+    Call endpoint defined in url
+    :return: cipher from endpoint in a hex string
+    """
+    session = requests.session()
+    response = session.get(url+"/sign_random_document_for_students/"+hexstring)
+    return json.loads(response.text, object_hook=lambda d: SimpleNamespace(**d))
+
+def getPK() -> public_key:
+    """
+    Call endpoint defined in url
+    :return: cipher from endpoint in a hex string
+    """
+    session = requests.session()
+    response = session.get(url+"/pk/")
+    cookies = session.cookies.get_dict()
+    return json.loads(response.text, object_hook=lambda d: SimpleNamespace(**d))
+
+def getQuote(msg, signature):
+    cookies = \
+        {
+        'msg': msg,
+        'signature': signature
+        }
+    r = requests.get(url + '/quote', cookies=cookies)
+    return r
 if __name__ == '__main__':
-    print_hi('PyCharm')
+    pk = getPK()
+    BBBB_sign = signRandomDocument('42424242')
 
-# See PyCharm help at https://www.jetbrains.com/help/pycharm/
+    random_int = random.randint(1, 10)**pk.e
+
+    message = (BBBB_sign.signature * random_int) % pk.N
+
+
+
+
+
+
+
+
