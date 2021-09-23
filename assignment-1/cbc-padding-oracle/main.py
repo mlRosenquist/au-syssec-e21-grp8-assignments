@@ -39,7 +39,13 @@ def call_oracle(hexString):
     """
     cookies = {'authtoken': hexString}
     r = requests.get(url+'/quote', cookies=cookies)
-    if(r.text == 'No quote for you!'):
+    if(r.text == 'No quote for you!' or
+            r.text == "'utf-8' codec can't decode byte 0xcc in position 2: invalid continuation byte" or
+            r.text == "'utf-8' codec can't decode byte 0xdc in position 2: invalid continuation byte" or
+            r.text == "'utf-8' codec can't decode byte 0xdc in position 2: unexpected end of data" or
+            r.text == "'utf-8' codec can't decode byte 0xd8 in position 0: unexpected end of data" or
+            r.text == "'utf-8' codec can't decode byte 0xb4 in position 2: invalid start byte" or
+            "decode" in r.text):
         return OracleStatus.NoPaddingError
     elif(r.text == 'Padding is incorrect.' or r.text == 'PKCS#7 padding is incorrect.'):
         return OracleStatus.PaddingError
@@ -52,7 +58,7 @@ def test_validity(error):
     :param error: OracleStatus enum
     :return: 1 if padding error is received else 0
     """
-    if error != OracleStatus.PaddingError:
+    if error != OracleStatus.PaddingError and error != OracleStatus.Unknown:
         return 1
     return 0
 
@@ -83,6 +89,13 @@ def block_search_byte(size_block, i, pos, l):
     Create custom block for the byte we search
     """
     hex_char = hex(pos).split("0x")[1]
+
+    test = (
+        "00" * (size_block - (i + 1))
+        + ("0" if len(hex_char) % 2 != 0 else "")
+        + hex_char
+        + "".join(l)
+    )
     return (
         "00" * (size_block - (i + 1))
         + ("0" if len(hex_char) % 2 != 0 else "")
@@ -127,6 +140,7 @@ def getBlockByte(size_block, i, ct_pos, valide_value, cipher_block, block):
         status.block_search_byte = bk
         status.ct_pos = ct_pos
         return status
+
 
 def getPlainText() -> str:
     cipher = getCipher().upper()
@@ -226,24 +240,86 @@ def getPlainText() -> str:
     decoded = bytes.fromhex(hex_r[0: -(padding * 2)]).decode()
     return decoded
 
+
+def getBlockByte2(size_block, i, value, found_values_block, result, block):
+    """
+    Validates if a byte is to be included
+    Generate hex and calls oracle
+    :return: OracleStatus
+    """
+    bk = block_search_byte(size_block, i, value, found_values_block)
+    bc = block_padding(size_block, i)
+    tmp = hex_xor(bk, bc)
+    up_cipher = tmp + result[block]
+    if(len(up_cipher) % 16 != 0):
+        x = 1+1
+    # we call the oracle, our god
+    error = call_oracle(up_cipher)
+    status = BlockByteStatus()
+    status.oracleStatus = error
+    status.block_search_byte = bk
+    status.ct_pos = value
+    return status
+
 def buildCipherText(secret, suffix):
+    global value
     size_block = 16
     len_block = size_block * 2
-    valide_value = []
-    result = []
 
-    # Last block doesnt matter ... We fill with A's (41's hex)
-    iv = bytearray.fromhex('AAAAAAAAAAAAAAAA'.encode('utf-8').hex())
-    last_block = bytearray.fromhex('AAAAAAAAAAAAAAAA'.encode('utf-8').hex())
-    second_last_block = bytearray.fromhex('00000000000000000000000000000000')
+    desired_text_str = secret + suffix
+    desired_text_hex = desired_text_str.encode('utf-8').hex() + "10101010101010101010101010101010"
+    desired_text_bytes = bytearray.fromhex(desired_text_hex)
+    desired_text_bytes_split = split_len(desired_text_hex, len_block)
 
-    for i in range(size_block-1, -1, -1):
-        for value in range(0, 256):
-            response = call_oracle((iv + second_last_block[0:i] + bytearray([value]) + second_last_block[i+1:]+last_block).hex())
-            if(response != response.PaddingError):
-                second_last_block[i] = value
-                print(second_last_block)
-                break
+    found_values_block = []
+    result = split_len((bytearray(b'\x00') * size_block * 6 + bytearray(b'\x41') * size_block ).hex(), len_block)
+    cipher_block = split_len((bytearray(b'\x00') * size_block * 6 + bytearray(b'\x41') * size_block).hex(), len_block)
+
+    for block in reversed(range(1, len(cipher_block))):
+        print("[+] Search value block : ", block, "\n")
+
+        for i in range(0, size_block):
+            print("[+] Search Byte : ", i, "\n")
+            blockByteResults = py_linq.Enumerable([])
+            futures = []
+            searching = True
+            concurrent_tasks = 8 * 4
+            batch_number = 0
+            while searching:
+                with concurrent.futures.ProcessPoolExecutor(max_workers=concurrent_tasks) as pool:
+                    futures = [pool.submit(getBlockByte2, size_block, i, value, found_values_block, result, block) for
+                               value in range(batch_number * concurrent_tasks,
+                                               batch_number * concurrent_tasks + concurrent_tasks)]
+                    wait(futures)
+                for fut in futures:
+                    blockByteResults.append(fut.result())
+                if (blockByteResults.any(lambda res: res is not None and test_validity(res.oracleStatus))):
+                    searching = False
+                batch_number += 1
+
+            if (blockByteResults.any(lambda res: res is not None and test_validity(res.oracleStatus))):
+                blockByteRes = blockByteResults.first(lambda res: res is not None and test_validity(res.oracleStatus))
+
+                found = True
+
+                # data analyse and insert in rigth order
+                values = re.findall("..", blockByteRes.block_search_byte)
+                found_values_block.insert(0, values[size_block - (i + 1)])
+
+                if (i == 15):
+                    result[block - 1] = f'{blockByteRes.ct_pos:02x}' + result[block - 1][3:]
+                else:
+                    result[block - 1] = result[block - 1][:len_block - i * 2 - 1] + f'{blockByteRes.ct_pos:02x}' + result[block - 1][len_block - i * 2 + 1:]
+
+        result[block-1] = hex_xor(result[block-1], desired_text_bytes_split[block-1])
+        found_values_block = []
+        print("".join(result))
+
+
+
+
+
+
 
 
 
@@ -256,7 +332,7 @@ def buildCipherText(secret, suffix):
 if __name__ == '__main__':
     retrievePlainText = False
     retrieveQuote = True
-
+    cipher = getCipher().upper()
     if(retrievePlainText):
         plaintext = getPlainText()
     else:
@@ -269,3 +345,7 @@ if __name__ == '__main__':
         cipherText = buildCipherText(secret, suffix)
 
     print(secret)
+
+"""
+authtoken=50b02344eee3237fde748ea1cea3f4a2c83eddf3c318aeaae17bff72895ee5a2ec10a9d30be2074af466b5c3b7d300d6d37cecc3049d8ed492f43aedbb4e8bea36dd82636bdd16f142c4b15f9c883f7534ed5291f477b3b9b61430904412c26f41414141414141414141414141414141; Path=/;
+"""
