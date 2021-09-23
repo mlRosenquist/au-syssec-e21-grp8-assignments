@@ -18,7 +18,7 @@ class BlockByteStatus:
     block_search_byte : str
     ct_pos : int
 
-url = 'http://localhost:5000'
+url = 'https://cbc.syssec.lnrd.net/'
 
 
 def getCipher() -> str:
@@ -128,8 +128,7 @@ def getBlockByte(size_block, i, ct_pos, valide_value, cipher_block, block):
         status.ct_pos = ct_pos
         return status
 
-# for each cipher_block
-if __name__ == '__main__':
+def getPlainText() -> str:
     cipher = getCipher().upper()
     size_block = 16
     found = False
@@ -154,11 +153,13 @@ if __name__ == '__main__':
             blockByteResults = py_linq.Enumerable([])
             futures = []
             searching = True
-            concurrent_tasks = 8*7
+            concurrent_tasks = 8 * 7
             batch_number = 0
             while searching:
                 with concurrent.futures.ProcessPoolExecutor(max_workers=concurrent_tasks) as pool:
-                    futures = [pool.submit(getBlockByte, size_block, i, ct_pos, valide_value, cipher_block, block) for ct_pos in range(batch_number*concurrent_tasks,batch_number*concurrent_tasks+concurrent_tasks)]
+                    futures = [pool.submit(getBlockByte, size_block, i, ct_pos, valide_value, cipher_block, block) for
+                               ct_pos in range(batch_number * concurrent_tasks,
+                                               batch_number * concurrent_tasks + concurrent_tasks)]
                     wait(futures)
                 for fut in futures:
                     blockByteResults.append(fut.result())
@@ -166,7 +167,7 @@ if __name__ == '__main__':
                     searching = False
                 batch_number += 1
 
-            if(blockByteResults.any(lambda res: res is not None and test_validity(res.oracleStatus))):
+            if (blockByteResults.any(lambda res: res is not None and test_validity(res.oracleStatus))):
                 blockByteRes = blockByteResults.first(lambda res: res is not None and test_validity(res.oracleStatus))
 
                 found = True
@@ -175,13 +176,11 @@ if __name__ == '__main__':
                 value = re.findall("..", blockByteRes.block_search_byte)
                 valide_value.insert(0, value[size_block - (i + 1)])
 
-
-
                 bytes_found = "".join(valide_value)
                 if (
-                    i == 0
-                    and int(bytes_found, 16) > size_block
-                    and block == len(cipher_block) - 1
+                        i == 0
+                        and int(bytes_found, 16) > size_block
+                        and block == len(cipher_block) - 1
                 ):
                     print(
                         "[-] Error decryption failed the padding is > "
@@ -209,10 +208,10 @@ if __name__ == '__main__':
                     hex_r = "".join(result)
                     if len(hex_r) > 0:
                         print("[+] Partial Decrypted value (HEX):", hex_r.upper())
-                        padding = int(hex_r[len(hex_r) - 2 : len(hex_r)], 16)
+                        padding = int(hex_r[len(hex_r) - 2: len(hex_r)], 16)
                         print(
                             "[+] Partial Decrypted value (ASCII):",
-                            bytes.fromhex(hex_r[0 : -(padding * 2)]).decode(),
+                            bytes.fromhex(hex_r[0: -(padding * 2)]).decode(),
                         )
                     sys.exit()
             found = False
@@ -223,8 +222,50 @@ if __name__ == '__main__':
     print("")
     hex_r = "".join(result)
     print("[+] Decrypted value (HEX):", hex_r.upper())
-    padding = int(hex_r[len(hex_r) - 2 : len(hex_r)], 16)
-    decoded = bytes.fromhex(hex_r[0 : -(padding * 2)]).decode()
-    print("[+] Decrypted value (ASCII):", decoded)
+    padding = int(hex_r[len(hex_r) - 2: len(hex_r)], 16)
+    decoded = bytes.fromhex(hex_r[0: -(padding * 2)]).decode()
+    return decoded
 
-    print(decoded)
+def buildCipherText(secret, suffix):
+    size_block = 16
+    len_block = size_block * 2
+    valide_value = []
+    result = []
+
+    # Last block doesnt matter ... We fill with A's (41's hex)
+    iv = bytearray.fromhex('AAAAAAAAAAAAAAAA'.encode('utf-8').hex())
+    last_block = bytearray.fromhex('AAAAAAAAAAAAAAAA'.encode('utf-8').hex())
+    second_last_block = bytearray.fromhex('00000000000000000000000000000000')
+
+    for i in range(size_block-1, -1, -1):
+        for value in range(0, 256):
+            response = call_oracle((iv + second_last_block[0:i] + bytearray([value]) + second_last_block[i+1:]+last_block).hex())
+            if(response != response.PaddingError):
+                second_last_block[i] = value
+                print(second_last_block)
+                break
+
+
+
+
+
+
+
+
+
+if __name__ == '__main__':
+    retrievePlainText = False
+    retrieveQuote = True
+
+    if(retrievePlainText):
+        plaintext = getPlainText()
+    else:
+        plaintext = 'You never figure out that "I should have used authenticated encryption because ...". :)'
+
+    secret = plaintext[27:82]
+
+    if(retrieveQuote):
+        suffix = ' plain CBC is not secure!'
+        cipherText = buildCipherText(secret, suffix)
+
+    print(secret)
