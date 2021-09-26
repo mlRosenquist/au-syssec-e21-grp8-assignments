@@ -3,8 +3,11 @@ import random
 from types import SimpleNamespace
 
 import requests
+"""
+Inspired by: https://crypto.stackexchange.com/questions/2323/how-does-a-chosen-plaintext-attack-on-rsa-work
 
-url = 'http://127.0.0.1:5000'
+"""
+url = 'https://rsa.syssec.lnrd.net/'
 
 class sign_document_response:
     msg : str
@@ -16,8 +19,9 @@ class public_key:
 
 def signRandomDocument(hexstring) -> sign_document_response:
     """
-    Call endpoint defined in url
-    :return: cipher from endpoint in a hex string
+    Sign a hexstring
+    :param hexstring: Hexstring to be signed
+    :return: sign_document_response with msg and signature
     """
     session = requests.session()
     response = session.get(url+"/sign_random_document_for_students/"+hexstring)
@@ -25,8 +29,8 @@ def signRandomDocument(hexstring) -> sign_document_response:
 
 def getPK() -> public_key:
     """
-    Call endpoint defined in url
-    :return: cipher from endpoint in a hex string
+    Retrieves the public key
+    :return: public_key with N and e
     """
     session = requests.session()
     response = session.get(url+"/pk/")
@@ -34,6 +38,12 @@ def getPK() -> public_key:
     return json.loads(response.text, object_hook=lambda d: SimpleNamespace(**d))
 
 def getQuote(msg, signature):
+    """
+    Retrieve the quote
+    :param msg: message to include in grade cookie
+    :param signature: signature to related message to include in grade cookie
+    :return: The quote
+    """
     j = json.dumps({'msg': msg, 'signature': signature})
     session = requests.session()
     session.cookies.set('grade', j)
@@ -41,30 +51,25 @@ def getQuote(msg, signature):
     return r
 if __name__ == '__main__':
     pk = getPK()
+
     desired_txt = 'You got a 12 because you are an excellent student! :)'
     desired_txt_hex = desired_txt.encode('utf-8').hex()
     desired_txt_bytes = bytes.fromhex(desired_txt_hex)
     desired_txt_int = int.from_bytes(desired_txt_bytes, byteorder='big')
 
-
     m1 = 5
     m1_sign = signRandomDocument(f'{m1:02x}')
-
     s1 = int(m1_sign.signature, 16)
-    m1 = int.from_bytes(bytes.fromhex(m1_sign.msg), byteorder='big')
 
-    tmp = desired_txt_int // 5
-    m2 = tmp % pk.N
-
+    m2 = desired_txt_int // 5 % pk.N
     m2_sign = signRandomDocument(f'{m2:02x}')
     s2 = int(m2_sign.signature, 16)
     m2 = int.from_bytes(bytes.fromhex(m2_sign.msg), byteorder='big')
 
     s = s1 * s2 % pk.N
 
-    quote = getQuote(desired_txt_hex, s)
-    print((m1, s1), (m2, s2))
-    #signRandomDocument(f'{m_1:02x}')
+    quote = getQuote(desired_txt_hex, f'{s:02x}')
+    print(("quote"), quote.text)
 
 
 
