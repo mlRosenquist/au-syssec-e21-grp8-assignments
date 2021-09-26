@@ -34,20 +34,37 @@ def getPK() -> public_key:
     return json.loads(response.text, object_hook=lambda d: SimpleNamespace(**d))
 
 def getQuote(msg, signature):
-    cookies = \
-        {
-        'msg': msg,
-        'signature': signature
-        }
-    r = requests.get(url + '/quote', cookies=cookies)
+    j = json.dumps({'msg': msg, 'signature': signature})
+    session = requests.session()
+    session.cookies.set('grade', j)
+    r = session.get(url + '/quote')
     return r
 if __name__ == '__main__':
     pk = getPK()
-    BBBB_sign = signRandomDocument('42424242')
+    desired_txt = 'You got a 12 because you are an excellent student! :)'
+    desired_txt_hex = desired_txt.encode('utf-8').hex()
+    desired_txt_bytes = bytes.fromhex(desired_txt_hex)
+    desired_txt_int = int.from_bytes(desired_txt_bytes, byteorder='big')
 
-    random_int = random.randint(1, 10)**pk.e
 
-    message = (BBBB_sign.signature * random_int) % pk.N
+    m1 = 5
+    m1_sign = signRandomDocument(f'{m1:02x}')
+
+    s1 = int(m1_sign.signature, 16)
+    m1 = int.from_bytes(bytes.fromhex(m1_sign.msg), byteorder='big')
+
+    tmp = desired_txt_int // 5
+    m2 = tmp % pk.N
+
+    m2_sign = signRandomDocument(f'{m2:02x}')
+    s2 = int(m2_sign.signature, 16)
+    m2 = int.from_bytes(bytes.fromhex(m2_sign.msg), byteorder='big')
+
+    s = s1 * s2 % pk.N
+
+    quote = getQuote(desired_txt_hex, s)
+    print((m1, s1), (m2, s2))
+    #signRandomDocument(f'{m_1:02x}')
 
 
 
