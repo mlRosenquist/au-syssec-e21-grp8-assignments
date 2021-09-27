@@ -1,6 +1,6 @@
 # Run the attack
 
-Navigate to assignment-1 folder.
+Navigate to rsa-signatures-adversary folder.
 
 python3  -m venv  venv \
 ./venv/bin/activate \
