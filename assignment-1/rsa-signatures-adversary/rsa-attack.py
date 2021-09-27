@@ -69,7 +69,11 @@ if __name__ == '__main__':
     s = s1 * s2 % pk.N
 
     quote = getQuote(desired_txt_hex, f'{s:02x}')
-    print(quote.text)
+
+    with open("quotes.txt", "wb") as f:
+        f.write(bytes(quote.text, 'utf-8'))
+
+        f.close()
 
 
 
