@@ -1,50 +1,34 @@
-# from Crypto.Cipher import AES
-# key = b"0000111122223333"
-# iv = b"aaaabbbbccccdddd"
-# cipher = AES.new(key, AES.MODE_CBC, iv)
-# a = b"This simple sentence is forty-seven bytes long."
-# ciphertext = cipher.encrypt(a + chr(1).encode())
-# mod = ciphertext[0:31] + b"\xff" + ciphertext[32:]
-# print(ciphertext.hex())
-# print(mod.hex())
-
-# cipher = AES.new(key, AES.MODE_CBC, iv)
-# print(cipher.decrypt(ciphertext).hex())
-# cipher = AES.new(key, AES.MODE_CBC, iv)
-# print(cipher.decrypt(mod).hex())
-# import sys
-# from pador import encr, decr
-# a = "This sentence cleaarly says I'M A LOSER."
-# original = encr(a.encode())
-# # print(original)
-# for i in range(256):
-#     mod = original[0:31] + i.to_bytes(1, byteorder=sys.byteorder) + original[32:]
-#     if(decr(mod) != "PADDING ERROR"):
-#         print(f"{i} is correctly padded!")
-
-# prefix = original[0:16] + b"AAAAAAAAAAAAAAA"
-# for i in range(256):
-#     mod = prefix + i.to_bytes(1, byteorder=sys.byteorder) + original[32:]
-#     if(decr(mod) != "PADDING ERROR"):
-#         print(f"{i} is correctly padded")
-from main import getAuthToken, getQuote
-from numpy import byte, ceil
+from numpy import ceil
 import sys
-from py_linq import py_linq 
+from requests.sessions import session
+import requests
 BLOCK_SIZE = 16
+url = 'https://cbc.syssec.lnrd.net/'
+
+def getAuthToken() -> str:
+    """
+    Call endpoint defined in url
+    :return: cipher from endpoint in a hex string
+    """
+    session = requests.session()
+    session.get(url)
+    cookies = session.cookies.get_dict()
+    return cookies['authtoken']
+
+def getQuote(token) -> str:
+    cookies = {'authtoken': token}
+    r = requests.get(url+'/quote', cookies=cookies)
+    return r.text
 def recoverSecret():
     prefix_known_length = 0 #The known length of the message that preceeds the secret part
     token = bytearray.fromhex(getAuthToken())
-    print(token.hex())
-    # iv = token[0:16]
-    # token = token[16:] #First 16 bytes are IV
     recovered_plaintext = ""
-    for b in range(1, int(ceil(len(token)-prefix_known_length)/BLOCK_SIZE + 1)):
+    for b in range(1, int(ceil(len(token)-prefix_known_length)/BLOCK_SIZE + 1)): #Iterate over all bytes
         prev_block_start = len(token)-(b*BLOCK_SIZE)-BLOCK_SIZE-1
         recovered_block = bytearray()
         padding = 0x01
-        for i in range(BLOCK_SIZE-1, -1, -1):
-            token_copy = token[:]
+        for i in range(BLOCK_SIZE-1, -1, -1): #Iterate backwards over block
+            token_copy = token[:] #Copy token
             for j in range(padding - 1): #Use new padding for existing recovered bytes
                 token_copy[prev_block_start + BLOCK_SIZE - j] = token_copy[prev_block_start + BLOCK_SIZE - j] ^ recovered_block[j] ^ padding
             byte_recovered = False
@@ -53,20 +37,18 @@ def recoverSecret():
                     continue
                 original_value = token_copy[prev_block_start + i + 1]
                 token_copy[prev_block_start + i + 1] = token_copy[prev_block_start + i + 1] ^ j ^ padding
-                # to_test = (iv + token_copy)[prev_block_start+len(iv)+1:prev_block_start+len(iv)+2*BLOCK_SIZE+1].hex()
-                to_test = token_copy[prev_block_start+1:prev_block_start+1+2*BLOCK_SIZE].hex()
+                to_test = token_copy[prev_block_start+1:prev_block_start+1+2*BLOCK_SIZE].hex() #Construct token
                 result = getQuote(to_test)
                 if("No quote for you!" in result): #Correct byte found 
-                    print(to_test.upper())
                     recovered_block = recovered_block + j.to_bytes(1, sys.byteorder)
                     recovered_plaintext += chr(j)
-                    print(f"Found {len(recovered_block)} bytes: {recovered_block[::-1].hex()}")
+                    print(f"Found {len(recovered_block)} bytes: {recovered_block[::-1].hex()}") #print found text and status message
                     byte_recovered = True
                     break
                 else:
                     token_copy[prev_block_start + i + 1] = original_value
             padding += 0x01
-            if(not byte_recovered):
+            if(not byte_recovered): #Early exit if no byte found
                 return ""
     return recovered_plaintext[::-1]
 
@@ -117,30 +99,40 @@ def paddingAttack(token, knownText, desiredText):
     desired_text_blocks = split_len(desiredTextPadded, BLOCK_SIZE)
     known_text_blocks = split_len(knownTextPadded, BLOCK_SIZE)
     for b in reversed(range(1, len(token_blocks))):
-        if(b == len(token_blocks)-1):                 #Zeroing vector known
+        if(b == len(token_blocks)-1):                 #Zeroing vector known for the last block
             for i in range(BLOCK_SIZE):
                 token_blocks[b-1][i] = token_blocks[b-1][i] ^ known_text_blocks[b-1][i] ^ desired_text_blocks[b-1][i]
             continue 
         zeroing_blocks[b-1] = attack_block(token_blocks[b-1], token_blocks[b])
         for i in range(BLOCK_SIZE):
-            token_blocks[b-1][i] = token_blocks[b-1][i] ^ zeroing_blocks[b-1][i] ^ desired_text_blocks[b-1][i]
+            #Update block with found zeroing vector and desired plaintext in order to use in next block attack
+            token_blocks[b-1][i] = token_blocks[b-1][i] ^ zeroing_blocks[b-1][i] ^ desired_text_blocks[b-1][i] 
     quote = getQuote(b''.join(token_blocks).hex())
-    print(b''.join(token_blocks).hex())
-    # '6d5402774fa1b35430aa745b422b2611a73f0123bd175179598faabb5e7483dece594bad3014703a9fff8920adfa53f10476e1cc341325e2130eae2a7dfca0a8cbdcb1090d820e7c6131690b561c971fd688783dfcd92af2f70eb5e9a6972ff79dafd615c3d4df4e13fe959387c79905'
     return quote
     
 
+# Used to recover the full plaintext in the beginning
+# plainText = recoverSecret()
 
-# secret = recoverSecret()
-token = bytearray.fromhex(getAuthToken())
-knownText = 'You never figure out that "I should have used authenticated encryption because ...". :)'
-secret = "I should have used authenticated encryption because ..."
-stringToAdd = ' plain CBC is not secure!'
+# Subsitution attack
+# token = bytearray.fromhex(getAuthToken())
+# knownText = 'You never figure out that "I should have used authenticated encryption because ...". :)'
+# secret = "I should have used authenticated encryption because ..."
+# stringToAdd = ' plain CBC is not secure!'
 # quote = paddingAttack(token, knownText.encode(), (secret + stringToAdd).encode())
 # print(quote)
+
+# A valid token for getting quotes
+quotes = []
 for i in range(10):
     token = '741a390d6cd0bc8082e68a8ea0804eabfa56917a4c9499806a0a2c6f0244a426d789a39cb3077ed034591c9dba0facb714e31c82504d32dc7d30d5354acf95dd130adc47a06889f8f8b5069f5f50242f76aa4ccf85a7ff32150cc7c342075ed7594d5b9eb53a6c61a310fbb87b84b933'
-    print(getQuote(token))
+    quotes.append(getQuote(token))
+with open("quotes.txt", "wb") as f:
+    for q in quotes:
+        f.write(q.encode())
+    f.close()
+
+
 
 
 
