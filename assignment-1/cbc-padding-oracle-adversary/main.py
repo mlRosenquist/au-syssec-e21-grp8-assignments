@@ -6,6 +6,7 @@ from concurrent.futures import wait
 from itertools import cycle
 from enum import Enum
 from py_linq import py_linq
+from requests.sessions import session
 
 class OracleStatus(Enum):
     NoPaddingError = 1,
@@ -29,6 +30,21 @@ def getCipher() -> str:
     session.get(url)
     cookies = session.cookies.get_dict()
     return cookies['authtoken']
+
+def getAuthToken() -> str:
+    """
+    Call endpoint defined in url
+    :return: cipher from endpoint in a hex string
+    """
+    session = requests.session()
+    session.get(url)
+    cookies = session.cookies.get_dict()
+    return cookies['authtoken']
+
+def getQuote(token) -> str:
+    cookies = {'authtoken': token}
+    r = requests.get(url+'/quote', cookies=cookies)
+    return r.text
 
 def call_oracle(hexString):
     """
