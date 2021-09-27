@@ -125,6 +125,7 @@ def paddingAttack(token, knownText, desiredText):
         for i in range(BLOCK_SIZE):
             token_blocks[b-1][i] = token_blocks[b-1][i] ^ zeroing_blocks[b-1][i] ^ desired_text_blocks[b-1][i]
     quote = getQuote(b''.join(token_blocks).hex())
+    print(b''.join(token_blocks).hex())
     # '6d5402774fa1b35430aa745b422b2611a73f0123bd175179598faabb5e7483dece594bad3014703a9fff8920adfa53f10476e1cc341325e2130eae2a7dfca0a8cbdcb1090d820e7c6131690b561c971fd688783dfcd92af2f70eb5e9a6972ff79dafd615c3d4df4e13fe959387c79905'
     return quote
     
