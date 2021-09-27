@@ -31,6 +31,24 @@ def i2osp(x, xLen): #from https://stackoverflow.com/questions/39964383/implement
     return digits[::-1]
 
 
+def rsasp1(key: tuple, message: int) -> int:
+    d = key[0]
+    n = key[1]
+    if not 0 <= message < n:
+        raise ValueError('message representative out of range')
+    s = pow(message, d, n)
+    return s
+
+
+def rsavp1(key: tuple, signature: int) -> int:
+    n = key[0]
+    e = key[1]
+    if not 0 <= signature < n:
+        raise ValueError('message representative out of range')
+    m = pow(signature, e, n)
+    return m
+
+
 def emsa_pss_encode(message: bytes, emBits: int) -> bytes:
     if len(message) > ((2^64)-1):
         raise ValueError('message too long')
@@ -59,11 +77,24 @@ def emsa_pss_encode(message: bytes, emBits: int) -> bytes:
 
 
 def rsassa_pss_sign(message: bytes, key: bytes) -> bytes:
+    # modulus and private exponent
+    N = rsa_key['_n']
+    d = rsa_key['_d']
+
     modBits = 3072
     EM = emsa_pss_encode(message, (modBits - 1))
     m = os2ip(EM)
+    s = rsasp1((d, N), m)
+    S = i2osp(s, 128)
+    return S
 
 
+def rsassa_pss_verify(key: tuple, message: bytes, signature: bytes) -> bytes:
+    if not len(signature) == 128:
+        raise ValueError('invalid signature')
+    s = os2ip(signature)
+    m = rsavp1((n, e), s)
+    EM = i2osp(m, ) #resume here
 
 
 def sign(message: bytes) -> bytes:
