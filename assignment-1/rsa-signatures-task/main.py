@@ -1,11 +1,69 @@
 import json
 import math
 import secrets
+import hashlib
 from flask import Flask, request, make_response, redirect, url_for
 from secret_data import rsa_key
 
 app = Flask(__name__)
 quotes = open('quotes.txt', 'r').readlines()
+
+
+def os2ip(X): #from https://stackoverflow.com/questions/39964383/implementation-of-i2osp-and-os2ip
+    xLen = len(X)
+    X = X[::-1]
+    x = 0
+    for i in range(xLen):
+        x += X[i] * 256 ** i
+    return x
+
+
+def i2osp(x, xLen): #from https://stackoverflow.com/questions/39964383/implementation-of-i2osp-and-os2ip
+    if x >= 256 ** xLen:
+        raise ValueError("integer too large")
+    digits = []
+
+    while x:
+        digits.append(int(x % 256))
+        x //= 256
+    for i in range(xLen - len(digits)):
+        digits.append(0)
+    return digits[::-1]
+
+
+def emsa_pss_encode(message: bytes, emBits: int) -> bytes:
+    if len(message) > ((2^64)-1):
+        raise ValueError('message too long')
+    sha_256 = hashlib.sha256()
+    sha_256.update(message)
+    mHash = sha_256.digest()
+    sLen = 32
+    hLen = 256
+    emLen = 128
+    if emLen < (sLen + hLen + 2):
+        raise ValueError('encoding error')
+    salt = secrets.token_bytes(sLen)
+    M = bytearray(b'\x00' * 8) + mHash + salt
+    sha_256 = hashlib.sha256()
+    sha_256.update(M)
+    H = sha_256.digest()
+    PS = bytearray(b'\x00' * (emLen - sLen - hLen - 2))
+    DB = PS + b'\x01' + salt
+    sha_256 = hashlib.sha256()
+    sha_256.update(H)
+    dbMask = sha_256.digest()
+    maskedDB = DB ^ dbMask
+    maskedDB[:(8 * emLen)-emBits] = 0
+    EM = maskedDB + H + b'\xbc'
+    return EM
+
+
+def rsassa_pss_sign(message: bytes, key: bytes) -> bytes:
+    modBits = 3072
+    EM = emsa_pss_encode(message, (modBits - 1))
+    m = os2ip(EM)
+
+
 
 
 def sign(message: bytes) -> bytes:
@@ -17,7 +75,7 @@ def sign(message: bytes) -> bytes:
     # byte order
     m = int.from_bytes(message, 'big')
     if not 0 <= m < N:
-        raise ValueError('message too large')
+        raise ValueError('message too long')
     # compute the signature
     s = pow(m, d, N)
     # encode the signature into a bytes using big-endian byte order

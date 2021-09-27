@@ -68,7 +68,7 @@ if __name__ == '__main__':
 
     s = s1 * s2 % pk.N
 
-    quote = getQuote(desired_txt_hex, f'{s:02x}')
+    quote = getQuote(desired_txt_hex, f'{s1:02x}')
     print(quote.text)
 
 
