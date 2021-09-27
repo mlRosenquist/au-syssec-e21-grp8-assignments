@@ -30,7 +30,7 @@
 from main import getAuthToken, getQuote
 from numpy import byte, ceil
 import sys
-from py_linq import py_linq
+from py_linq import py_linq 
 BLOCK_SIZE = 16
 def recoverSecret():
     prefix_known_length = 0 #The known length of the message that preceeds the secret part
@@ -136,8 +136,11 @@ token = bytearray.fromhex(getAuthToken())
 knownText = 'You never figure out that "I should have used authenticated encryption because ...". :)'
 secret = "I should have used authenticated encryption because ..."
 stringToAdd = ' plain CBC is not secure!'
-quote = paddingAttack(token, knownText.encode(), (secret + stringToAdd).encode())
-print(quote)
+# quote = paddingAttack(token, knownText.encode(), (secret + stringToAdd).encode())
+# print(quote)
+for i in range(10):
+    token = '741a390d6cd0bc8082e68a8ea0804eabfa56917a4c9499806a0a2c6f0244a426d789a39cb3077ed034591c9dba0facb714e31c82504d32dc7d30d5354acf95dd130adc47a06889f8f8b5069f5f50242f76aa4ccf85a7ff32150cc7c342075ed7594d5b9eb53a6c61a310fbb87b84b933'
+    print(getQuote(token))
 
 
 
