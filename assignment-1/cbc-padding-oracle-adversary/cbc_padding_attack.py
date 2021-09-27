@@ -76,7 +76,6 @@ def attack_block(prevBlock, block):
                 prevBlockCopy[br] = prevBlockCopy[br] ^ padding ^ bytes_recovered[br]
             prevBlockCopy[b] = prevBlockCopy[b] ^ padding ^ i
             result = getQuote((prevBlockCopy + block).hex())
-            print(result)
             if(not "incorrect" in result):
                 num_bytes_recovered += 1
                 bytes_recovered[b] = i
@@ -103,34 +102,48 @@ def paddingAttack(token, knownText, desiredText):
             for i in range(BLOCK_SIZE):
                 token_blocks[b-1][i] = token_blocks[b-1][i] ^ known_text_blocks[b-1][i] ^ desired_text_blocks[b-1][i]
             continue 
+        print(f"Recovering block {b}")
         zeroing_blocks[b-1] = attack_block(token_blocks[b-1], token_blocks[b])
+        print(f"Recovered block {b}")
         for i in range(BLOCK_SIZE):
             #Update block with found zeroing vector and desired plaintext in order to use in next block attack
             token_blocks[b-1][i] = token_blocks[b-1][i] ^ zeroing_blocks[b-1][i] ^ desired_text_blocks[b-1][i] 
-    quote = getQuote(b''.join(token_blocks).hex())
-    return quote
+    return b''.join(token_blocks).hex()
     
 
-# Used to recover the full plaintext in the beginning
-# plainText = recoverSecret()
+if(len(sys.argv)) != 2:
+    raise Exception("Wrong number of arguments")
+arg = sys.argv[1]
+if(arg == "recoverPlaintext"):
+    plainText = recoverSecret()
+    with open("plaintext.txt", "wb") as f:
+        f.write(plainText)
+        f.close()
+elif(arg == "subAttack"):
+    token = bytearray.fromhex(getAuthToken())
+    knownText = 'You never figure out that "I should have used authenticated encryption because ...". :)'
+    secret = "I should have used authenticated encryption because ..."
+    stringToAdd = ' plain CBC is not secure!'
+    validToken = paddingAttack(token, knownText.encode(), (secret + stringToAdd).encode())
+    quote = getQuote(validToken)
+    with open("validToken.txt", "wb") as f:
+        f.write(validToken)
+        f.close()
+    with open("quote.txt", "wb") as f:
+        f.write(quote)
+        f.close()
+elif(arg == "getQuotes"):
+    quotes = []
+    for i in range(10):
+        token = '741a390d6cd0bc8082e68a8ea0804eabfa56917a4c9499806a0a2c6f0244a426d789a39cb3077ed034591c9dba0facb714e31c82504d32dc7d30d5354acf95dd130adc47a06889f8f8b5069f5f50242f76aa4ccf85a7ff32150cc7c342075ed7594d5b9eb53a6c61a310fbb87b84b933'
+        quotes.append(getQuote(token))
+    with open("quotes.txt", "wb") as f:
+        for q in quotes:
+            f.write(q.encode())
+        f.close()
+else:
+    raise Exception("Invalid argument")
 
-# Subsitution attack
-# token = bytearray.fromhex(getAuthToken())
-# knownText = 'You never figure out that "I should have used authenticated encryption because ...". :)'
-# secret = "I should have used authenticated encryption because ..."
-# stringToAdd = ' plain CBC is not secure!'
-# quote = paddingAttack(token, knownText.encode(), (secret + stringToAdd).encode())
-# print(quote)
-
-# A valid token for getting quotes
-quotes = []
-for i in range(10):
-    token = '741a390d6cd0bc8082e68a8ea0804eabfa56917a4c9499806a0a2c6f0244a426d789a39cb3077ed034591c9dba0facb714e31c82504d32dc7d30d5354acf95dd130adc47a06889f8f8b5069f5f50242f76aa4ccf85a7ff32150cc7c342075ed7594d5b9eb53a6c61a310fbb87b84b933'
-    quotes.append(getQuote(token))
-with open("quotes.txt", "wb") as f:
-    for q in quotes:
-        f.write(q.encode())
-    f.close()
 
 
 
