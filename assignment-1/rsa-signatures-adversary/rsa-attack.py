@@ -4,7 +4,7 @@ from types import SimpleNamespace
 
 import requests
 """
-Inspired by: https://crypto.stackexchange.com/questions/2323/how-does-a-chosen-plaintext-attack-on-rsa-work
+https://crypto.stackexchange.com/questions/35644/chosen-message-attack-rsa-signature?fbclid=IwAR3SVNhhOAbP7rsnJW59twNkgB7sYt4zfPelsRsOJVhV7X60ysXk92OvtY
 
 """
 url = 'https://rsa.syssec.lnrd.net/'
