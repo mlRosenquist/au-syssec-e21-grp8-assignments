@@ -1,3 +1,4 @@
+import binascii
 import json
 import math
 import secrets
@@ -9,26 +10,26 @@ app = Flask(__name__)
 quotes = open('quotes.txt', 'r').readlines()
 
 
-def os2ip(X): #from https://stackoverflow.com/questions/39964383/implementation-of-i2osp-and-os2ip
-    xLen = len(X)
-    X = X[::-1]
-    x = 0
-    for i in range(xLen):
-        x += X[i] * 256 ** i
-    return x
+def i2osp(x, x_len):
+    '''Converts the integer x to its big-endian representation of length
+       x_len.
+    '''
+    if x > 256**x_len:
+        raise ValueError('message too long')
+    h = hex(x)[2:]
+    if h[-1] == 'L':
+        h = h[:-1]
+    if len(h) & 1 == 1:
+        h = '0%s' % h
+    x = binascii.unhexlify(h)
+    return b'\x00' * int(x_len-len(x)) + x
 
-
-def i2osp(x, xLen): #from https://stackoverflow.com/questions/39964383/implementation-of-i2osp-and-os2ip
-    if x >= 256 ** xLen:
-        raise ValueError("integer too large")
-    digits = []
-
-    while x:
-        digits.append(int(x % 256))
-        x //= 256
-    for i in range(xLen - len(digits)):
-        digits.append(0)
-    return digits[::-1]
+def os2ip(x):
+    '''Converts the byte string x representing an integer reprented using the
+       big-endian convient to an integer.
+    '''
+    h = binascii.hexlify(x)
+    return int(h, 16)
 
 
 def rsasp1(key: tuple, message: int) -> int:
@@ -39,6 +40,12 @@ def rsasp1(key: tuple, message: int) -> int:
     s = pow(message, d, n)
     return s
 
+def integer_ceil(a, b):
+    '''Return the ceil integer of a div b.'''
+    quanta, mod = divmod(a, b)
+    if mod:
+        quanta += 1
+    return quanta
 
 def rsavp1(key: tuple, signature: int) -> int:
     n = key[0]
@@ -55,9 +62,11 @@ def emsa_pss_encode(message: bytes, emBits: int) -> bytes:
     sha_256 = hashlib.sha256()
     sha_256.update(message)
     mHash = sha_256.digest()
+    hLen = len(mHash)
     sLen = 32
-    hLen = 256
-    emLen = 128
+
+    emLen = integer_ceil(emBits, 8)
+
     if emLen < (sLen + hLen + 2):
         raise ValueError('encoding error')
     salt = secrets.token_bytes(sLen)
@@ -75,6 +84,64 @@ def emsa_pss_encode(message: bytes, emBits: int) -> bytes:
     EM = maskedDB + H + b'\xbc'
     return EM
 
+def emsa_pss_verify(message: bytes, em: bytes, emBits: int) -> bool:
+    if len(message) > ((2^64)-1):
+        return False
+    sha_256 = hashlib.sha256()
+    sha_256.update(message)
+    mHash = sha_256.digest()
+
+    hLen = len(mHash)
+    sLen = 32
+    emLen = integer_ceil(emBits, 8)
+
+    if emLen < (sLen + hLen + 2):
+        raise False
+
+    if not em[-1] == b'\xbc':
+        return False
+
+    masked_db, h = em[:emLen-hLen-1], em[emLen-hLen-1:-1]
+
+    octets, bits = (8 * emLen - emBits) // 8, (8 * emLen - emBits) % 8
+    zero = masked_db[:octets] + masked_db[octets] & ~(255 >> bits)
+
+    for c in zero:
+        if not c == b'\x00':
+            return False
+
+    sha_256 = hashlib.sha256()
+    sha_256.update(h)
+    dbMask = sha_256.digest()
+
+    # 8
+    db = masked_db ^ dbMask
+
+    # 9
+    new_byte = db[octets] & 255 >> bits
+    db = (b'\x00' * octets) + new_byte + db[octets + 1:]
+
+    # 10
+    for c in db[:emLen-hLen-sLen-2]:
+        if not c == b'\x00':
+            return False
+    if not db[emLen-hLen-sLen-2] == b'\x01':
+        return False
+
+    # 11
+    salt = db[-sLen:]
+
+    # 12.
+    m_prime = (b'\x00' * 8) + mHash + salt
+    # 13.
+    sha_256 = hashlib.sha256()
+    sha_256.update(m_prime)
+    h_prime = sha_256.digest()
+    # 14.
+    result = True
+    for x, y in zip(h_prime, h):
+        result &= (x == y)
+    return result
 
 def rsassa_pss_sign(message: bytes, key: bytes) -> bytes:
     # modulus and private exponent
@@ -89,13 +156,22 @@ def rsassa_pss_sign(message: bytes, key: bytes) -> bytes:
     return S
 
 
-def rsassa_pss_verify(key: tuple, message: bytes, signature: bytes) -> bytes:
-    if not len(signature) == 128:
-        raise ValueError('invalid signature')
+def rsassa_pss_verify(message: bytes, signature: bytes) -> bool:
+    n = rsa_key['_n']
+    d = rsa_key['_d']
+    e = rsa_key['_e']
+
+    #k =
+    #if(len(s) !=)
+    modBits = 3072
     s = os2ip(signature)
     m = rsavp1((n, e), s)
-    EM = i2osp(m, ) #resume here
+    embits = modBits-1
+    em_len = integer_ceil(embits, 8)
+    em = i2osp(m, em_len)
 
+    verified = emsa_pss_verify(message, em, embits)
+    return verified
 
 def sign(message: bytes) -> bytes:
     """Sign a message using our private key."""
@@ -225,3 +301,10 @@ def sign_random_document_for_student(data):
         return {'msg': msg.hex(), 'signature': signature.hex()}
     except Exception as e:  # something went wrong
         return {'error': str(e)}
+
+msg = f'hello'.encode()
+# sign the message
+signature = sign(msg)
+verified = rsassa_pss_verify(msg, signature)
+
+print(signature)
