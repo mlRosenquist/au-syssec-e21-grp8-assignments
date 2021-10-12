@@ -1,7 +1,7 @@
 import json
 import random
 from types import SimpleNamespace
-
+import sys
 import requests
 """
 https://crypto.stackexchange.com/questions/35644/chosen-message-attack-rsa-signature?fbclid=IwAR3SVNhhOAbP7rsnJW59twNkgB7sYt4zfPelsRsOJVhV7X60ysXk92OvtY
@@ -51,7 +51,8 @@ def getQuote(msg, signature):
     return r
 if __name__ == '__main__':
     pk = getPK()
-
+    if(len(sys.argv) == 2):
+        url = "http://127.0.0.1:5000/"
     desired_txt = 'You got a 12 because you are an excellent student! :)'
     desired_txt_hex = desired_txt.encode('utf-8').hex()
     desired_txt_bytes = bytes.fromhex(desired_txt_hex)

@@ -10,7 +10,7 @@ from flask import Flask, request, make_response, redirect, url_for
 from secret_data import rsa_key
 
 app = Flask(__name__)
-quotes = open('quotes.txt', 'r').readlines()
+# quotes = open('quotes.txt', 'r').readlines()
 
 """
 Inspired by: https://github.com/bdauvergne/python-pkcs1
@@ -313,4 +313,8 @@ msg = f'hello'.encode()
 signature = rsassa_pss_sign(msg)
 verified = rsassa_pss_verify(msg, signature)
 
-print(verified)
+print(f"Message intact: {verified}")
+print("Altering message to 'hello!'")
+msg = f'hello!'.encode()
+verified = rsassa_pss_verify(msg, signature)
+print(f'Message intact: {verified}')
