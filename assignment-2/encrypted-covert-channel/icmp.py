@@ -1,4 +1,4 @@
-#Taken from https://github.com/ValentinBELYN/icmplib/blob/454e4c37617e2ea892b2e07df024c3c401d4b29b/icmplib/sockets.py#L125 and modified
+#Inspiration taken from https://github.com/ValentinBELYN/icmplib/blob/454e4c37617e2ea892b2e07df024c3c401d4b29b/icmplib/sockets.py#L125
 from struct import pack, unpack
 import socket
 from sys import platform

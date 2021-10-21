@@ -1,16 +1,24 @@
 import socket as soc
 import ipaddress
 import secrets
+from login import login
 from Crypto.Util.Padding import pad
 from Crypto.Cipher import AES
 from icmp import send 
+import os 
 def encrypt(key, data) -> bytes :
-    nonce = secrets.token_bytes(10)
+    nonce = secrets.token_bytes(12)
     cipher = AES.new(key, AES.MODE_GCM, nonce=nonce)
     ciphertext, tag = cipher.encrypt_and_digest(pad(data, 16))
     return [nonce, ciphertext, tag]
 
-key = "ELmxKedMDDdRFoquhuqvVSGA6dKtGz36".encode()
+if(not login()):
+    print("Application terminating")
+    exit()
+
+dir_path = os.path.dirname(os.path.realpath(__file__))
+key = bytearray.fromhex(open(f"{dir_path}/key.txt").read())
+
 socket = soc.socket(soc.AF_INET,soc.SOCK_RAW, soc.IPPROTO_ICMP)
 print("Welcome to the covert channel")
 print("Please enter the desired IP address to communicate with:")
