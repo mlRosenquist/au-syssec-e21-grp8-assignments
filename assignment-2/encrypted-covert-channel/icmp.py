@@ -33,9 +33,9 @@ def calc_checksum(data):
 
 def create_packet(id, sequence, data: bytes):
     checksum = 0
-    header = pack('!2B3H', ICMP_CODE, 0, checksum, id, sequence)
+    header = pack('!2B3H', ICMP_CODE, ICMP_HEADER_CODE, checksum, id, sequence)
     checksum = calc_checksum(header + data)
-    header = pack('!2B3H', ICMP_CODE, 0, checksum, id, sequence)
+    header = pack('!2B3H', ICMP_CODE, ICMP_HEADER_CODE, checksum, id, sequence)
     return header + data
 
 def send(s: socket.socket, dest_addr, data):
