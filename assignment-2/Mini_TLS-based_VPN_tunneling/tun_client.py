@@ -6,6 +6,9 @@ import os
 import time
 from scapy.all import *
 
+SERVER_IP = "10.0.2.15"
+SERVER_PORT = 9090
+
 TUNSETIFF = 0x400454ca
 IFF_TUN = 0x0001
 IFF_TAP = 0x0002
@@ -13,7 +16,7 @@ IFF_NO_PI = 0x1000
 
 # Create the tun interface
 tun = os.open("/dev/net/tun", os.O_RDWR)
-ifr = struct.pack('16sH', b'ahj%d', (IFF_TUN | IFF_NO_PI))
+ifr = struct.pack('16sH', b'client%d', (IFF_TUN | IFF_NO_PI))
 ifname_bytes = fcntl.ioctl(tun, TUNSETIFF, ifr)
 print("tun interface created...")
 
@@ -31,17 +34,17 @@ print("Interface is set up...")
 sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 
 while True:
-    # this will block until at least one interface is ready
-    ready, _, _ = select.select([sock, tun], [], [])    
+	# this will block until at least one interface is ready
+	ready, _, _ = select.select([sock, tun], [], [])
 	for fd in ready:
-	        if fd is sock:
-	            data, (ip, port) = sock.recvfrom(2048)
-	            pkt = IP(data)
-	            print("From socket <==: {} --> {}".format(pkt.src, pkt.dst))
-	            os.write(tun, bytes(pkt))
+		if fd is sock:
+			data, (ip, port) = sock.recvfrom(2048)
+			pkt = IP(data)
+			print("From socket <==: {} --> {}".format(pkt.src, pkt.dst))
+			os.write(tun, bytes(pkt))
 
-	        if fd is tun:
-	            packet = os.read(tun, 2048)
-	            pkt = IP(packet)
-	            print("From tun ==>: {} --> {}".format(pkt.src, pkt.dst))
-	            sock.sendto(packet, ("10.0.2.15", 9090))
+		if fd is tun:
+			packet = os.read(tun, 2048)
+			pkt = IP(packet)
+			print("From tun ==>: {} --> {}".format(pkt.src, pkt.dst))
+			sock.sendto(packet, (SERVER_IP, SERVER_PORT))
