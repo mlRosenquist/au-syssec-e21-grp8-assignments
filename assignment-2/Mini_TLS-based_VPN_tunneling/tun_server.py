@@ -1,6 +1,7 @@
 #!/usr/bin/python3
 
 import fcntl
+import ssl
 from scapy.all import *
 
 CLIENT_IP = "10.0.2.4"
@@ -31,16 +32,24 @@ print("Interface is set up...")
 IP_A = "0.0.0.0"
 PORT = 9090
 
-sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 sock.bind((IP_A, PORT))
+sock.listen(5)
+
+# Wrap in SSL/TLS
+context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+context.load_cert_chain(os.getcwd() + '/cert.pem', os.getcwd() + '/key.pem')
+
+sslSock = context.wrap_socket(sock, server_side=True)
+conn, addr = sslSock.accept()
 
 print("starting to listen:")
 while True:
 	# this will block until at least one interface is ready
-	ready, _, _ = select.select([sock, tun], [], [])
+	ready, _, _ = select.select([sslSock, tun], [], [])
 	for fd in ready:
 		if fd is sock:
-			data, (ip, port) = sock.recvfrom(2048)
+			data, (ip, port) = conn.recv(2048)
 			pkt = IP(data)
 			print("From {}:{} via socket <==: {} --> {}".format(ip, port, pkt.src, pkt.dst))
 			os.write(tun, bytes(pkt))
@@ -49,4 +58,4 @@ while True:
 			packet = os.read(tun, 2048)
 			pkt = IP(packet)
 			print("From tun ==>: {} --> {}".format(pkt.src, pkt.dst))
-			sock.sendto(packet, (CLIENT_IP, CLIENT_PORT))
+			conn.send(packet)
